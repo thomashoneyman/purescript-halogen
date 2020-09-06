@@ -12,7 +12,7 @@ import Prelude
 import Control.Applicative.Free (hoistFreeAp, retractFreeAp)
 import Control.Coroutine as CR
 import Control.Monad.Fork.Class (fork)
-import Control.Monad.Free (foldFree)
+import Control.Monad.Freed (interpret)
 import Control.Monad.Trans.Class (lift)
 import Control.Parallel (parSequence_, parallel, sequential)
 import Data.Coyoneda (liftCoyoneda)
@@ -72,7 +72,7 @@ evalM
   -> Ref (DriverState h r s f act ps i o)
   -> HalogenM s act ps o Aff
   ~> Aff
-evalM render initRef (HalogenM hm) = foldFree (go initRef) hm
+evalM render initRef (HalogenM hm) = interpret (go initRef) hm
   where
   go
     :: forall s' f' act' ps' i' o'

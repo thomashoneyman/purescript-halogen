@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Applicative.Free (FreeAp, liftFreeAp, hoistFreeAp)
 import Control.Monad.Error.Class (class MonadThrow, throwError)
-import Control.Monad.Free (Free, hoistFree, liftF)
+import Control.Monad.Freed (Free, hoistFree, lift)
 import Control.Monad.Reader.Class (class MonadAsk, ask)
 import Control.Monad.Rec.Class (class MonadRec, tailRecM, Step(..))
 import Control.Monad.State.Class (class MonadState)
@@ -82,21 +82,19 @@ derive newtype instance applyHalogenM :: Apply (HalogenM state action slots outp
 derive newtype instance applicativeHalogenM :: Applicative (HalogenM state action slots output m)
 derive newtype instance bindHalogenM :: Bind (HalogenM state action slots output m)
 derive newtype instance monadHalogenM :: Monad (HalogenM state action slots output m)
-derive newtype instance semigroupHalogenM :: Semigroup a => Semigroup (HalogenM state action slots output m a)
-derive newtype instance monoidHalogenM :: Monoid a => Monoid (HalogenM state action slots output m a)
 
 instance monadEffectHalogenM :: MonadEffect m => MonadEffect (HalogenM state action slots output m) where
-  liftEffect = HalogenM <<< liftF <<< Lift <<< liftEffect
+  liftEffect = HalogenM <<< lift <<< Lift <<< liftEffect
 
 instance monadAffHalogenM :: MonadAff m => MonadAff (HalogenM state action slots output m) where
-  liftAff = HalogenM <<< liftF <<< Lift <<< liftAff
+  liftAff = HalogenM <<< lift <<< Lift <<< liftAff
 
 instance parallelHalogenM :: Parallel (HalogenAp state action slots output m) (HalogenM state action slots output m) where
   parallel = HalogenAp <<< liftFreeAp
-  sequential = HalogenM <<< liftF <<< Par
+  sequential = HalogenM <<< lift <<< Par
 
 instance monadTransHalogenM :: MonadTrans (HalogenM state action slots o) where
-  lift = HalogenM <<< liftF <<< Lift
+  lift = HalogenM <<< lift <<< Lift
 
 instance monadRecHalogenM :: MonadRec (HalogenM state action slots output m) where
   tailRecM k a = k a >>= case _ of
@@ -104,16 +102,16 @@ instance monadRecHalogenM :: MonadRec (HalogenM state action slots output m) whe
     Done y -> pure y
 
 instance monadStateHalogenM :: MonadState state (HalogenM state action slots output m) where
-  state = HalogenM <<< liftF <<< State
+  state = HalogenM <<< lift <<< State
 
 instance monadAskHalogenM :: MonadAsk r m => MonadAsk r (HalogenM state action slots output m) where
-  ask = HalogenM $ liftF $ Lift ask
+  ask = HalogenM $ lift $ Lift ask
 
 instance monadTellHalogenM :: MonadTell w m => MonadTell w (HalogenM state action slots output m) where
-  tell = HalogenM <<< liftF <<< Lift <<< tell
+  tell = HalogenM <<< lift <<< Lift <<< tell
 
 instance monadThrowHalogenM :: MonadThrow e m => MonadThrow e (HalogenM state action slots output m) where
-  throwError = HalogenM <<< liftF <<< Lift <<< throwError
+  throwError = HalogenM <<< lift <<< Lift <<< throwError
 
 -- | An applicative-only version of `HalogenM` to allow for parallel evaluation.
 newtype HalogenAp state action slots output m a = HalogenAp (FreeAp (HalogenM state action slots output m) a)
@@ -125,7 +123,7 @@ derive newtype instance applicativeHalogenAp :: Applicative (HalogenAp state que
 
 -- | Raises an output message for the component.
 raise :: forall state action slots output m. output -> HalogenM state action slots output m Unit
-raise o = HalogenM $ liftF $ Raise o unit
+raise o = HalogenM $ lift $ Raise o unit
 
 -- | Sends a query to a child of a component at the specified slot.
 query
@@ -137,7 +135,7 @@ query
   -> slot
   -> query a
   -> HalogenM state action slots output m (Maybe a)
-query label p q = HalogenM $ liftF $ ChildQuery $ CQ.mkChildQueryBox $
+query label p q = HalogenM $ lift $ ChildQuery $ CQ.mkChildQueryBox $
   CQ.ChildQuery (\k → maybe (pure Nothing) k <<< Slot.lookup label p) q identity
 
 -- | Sends a query to all children of a component at a given slot label.
@@ -150,7 +148,7 @@ queryAll
   -> query a
   -> HalogenM state action slots output m (Map slot a)
 queryAll label q =
-  HalogenM $ liftF $ ChildQuery $ CQ.mkChildQueryBox $
+  HalogenM $ lift $ ChildQuery $ CQ.mkChildQueryBox $
     CQ.ChildQuery (\k -> map catMapMaybes <<< traverse k <<< Slot.slots label) q identity
   where
     catMapMaybes ∷ forall k v. Ord k ⇒ Map k (Maybe v) -> Map k v
@@ -169,7 +167,7 @@ derive newtype instance ordSubscriptionId :: Ord SubscriptionId
 -- | be stopped and no further subscriptions will be possible during
 -- | finalization.
 subscribe :: forall state action slots output m. ES.EventSource m action -> HalogenM state action slots output m SubscriptionId
-subscribe es = HalogenM $ liftF $ Subscribe (\_ -> es) identity
+subscribe es = HalogenM $ lift $ Subscribe (\_ -> es) identity
 
 -- | An alternative to `subscribe`, intended for subscriptions that unsubscribe
 -- | themselves. Instead of returning the `SubscriptionId` from `subscribe'`, it
@@ -181,12 +179,12 @@ subscribe es = HalogenM $ liftF $ Subscribe (\_ -> es) identity
 -- | be stopped and no further subscriptions will be possible during
 -- | finalization.
 subscribe' :: forall state action slots output m. (SubscriptionId -> ES.EventSource m action) -> HalogenM state action slots output m Unit
-subscribe' esc = HalogenM $ liftF $ Subscribe esc (const unit)
+subscribe' esc = HalogenM $ lift $ Subscribe esc (const unit)
 
 -- | Unsubscribes a component from an `EventSource`. If the subscription
 -- | associated with the ID has already ended this will have no effect.
 unsubscribe :: forall state action slots output m. SubscriptionId -> HalogenM state action slots output m Unit
-unsubscribe sid = HalogenM $ liftF $ Unsubscribe sid unit
+unsubscribe sid = HalogenM $ lift $ Unsubscribe sid unit
 
 -- | The ID value associated with a forked process. Allows the fork to be killed
 -- | at a later time.
@@ -212,18 +210,18 @@ derive newtype instance ordForkId :: Ord ForkId
 -- | be killed. New forks can be started during finalization but there will be
 -- | no means of killing them.
 fork :: forall state action slots output m. HalogenM state action slots output m Unit -> HalogenM state action slots output m ForkId
-fork hmu = HalogenM $ liftF $ Fork hmu identity
+fork hmu = HalogenM $ lift $ Fork hmu identity
 
 -- | Kills a forked process if it is still running. Attempting to kill a forked
 -- | process that has already ended will have no effect.
 kill :: forall state action slots output m. ForkId -> HalogenM state action slots output m Unit
-kill fid = HalogenM $ liftF $ Kill fid unit
+kill fid = HalogenM $ lift $ Kill fid unit
 
 -- | Retrieves an `Element` value that is associated with a `Ref` in the
 -- | rendered output of a component. If there is no currently rendered value for
 -- | the requested ref this will return `Nothing`.
 getRef :: forall state action slots output m. RefLabel -> HalogenM state action slots output m (Maybe Element)
-getRef p = HalogenM $ liftF $ GetRef p identity
+getRef p = HalogenM $ lift $ GetRef p identity
 
 imapState
   :: forall state state' action slots output m
