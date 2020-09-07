@@ -8,6 +8,8 @@ import Unsafe.Coerce (unsafeCoerce)
 
 foreign import data UnsafeBoundValue :: Type
 
+foreign import data UnsafeBoundF :: Type -> Type
+
 data Free f a
   = Pure a
   | Bind (f UnsafeBoundValue) (FreeBinds f UnsafeBoundValue a)
@@ -19,6 +21,7 @@ data FreeView f a b
 data FreeBinds f a b
   = Leaf (a -> Free f b)
   | Node (FreeBinds f a UnsafeBoundValue) (FreeBinds f UnsafeBoundValue b)
+  | Hoist (UnsafeBoundF ~> f) (FreeBinds UnsafeBoundF a b)
 
 data FreeCons f a b
   = FreeCons (a -> Free f UnsafeBoundValue) (FreeBinds f UnsafeBoundValue b)
@@ -33,7 +36,9 @@ suspend :: forall f a. Applicative f => Free f a -> Free f a
 suspend = roll <<< pure
 
 hoistFree :: forall f g. (f ~> g) -> Free f ~> Free g
-hoistFree k = interpret (lift <<< k)
+hoistFree nat = case _ of
+  Pure a -> Pure a
+  Bind f k -> Bind (nat f) (Hoist (unsafeCoerce nat) (unsafeCoerce k))
 
 instance functorFree :: Functor (Free f) where
   map f (Pure a) = Pure (f a)
@@ -59,20 +64,42 @@ resume ::
   r
 resume pure' bind' = case _ of
   Pure a -> pure' a
-  Bind a bs -> bind' a (go bs)
+  Bind a bs -> bind' a (go1 bs)
   where
-  go :: forall x y. FreeBinds f x y -> x -> Free f y
-  go bs x = case bs of
+  go1 :: forall x y. FreeBinds f x y -> x -> Free f y
+  go1 bs x = case bs of
     Leaf k -> k x
     Node l r -> case uncons l r of
       FreeCons k bs' -> case k x of
-        Pure a -> go bs' a
+        Pure a -> go1 bs' a
         Bind a bs'' -> Bind a (Node bs'' bs')
+    Hoist nat bs' ->
+      go2 nat bs' x
+
+  go2 :: forall g x y. (UnsafeBoundF ~> g) -> FreeBinds UnsafeBoundF x y -> x -> Free g y
+  go2 nat bs x = case bs of
+    Leaf k -> hoistFree nat (k x)
+    Node l r -> case uncons l r of
+      FreeCons k bs' -> case k x of
+        Pure a -> go2 nat bs' a
+        Bind a bs'' -> Bind (nat a) (Hoist nat (Node bs'' bs'))
+    Hoist nat' bs' ->
+      go2 (nat <<< nat') bs' x
 
 uncons :: forall f a b x. FreeBinds f a x -> FreeBinds f x b -> FreeCons f a b
-uncons l r = case l of
-  Leaf k -> FreeCons (unsafeCoerce k) (unsafeCoerce r)
-  Node l' r' -> uncons l' (Node (unsafeCoerce r') (unsafeCoerce r))
+uncons = go1
+  where
+  go1 :: forall a' b' x'. FreeBinds f a' x' -> FreeBinds f x' b' -> FreeCons f a' b'
+  go1 l r = case l of
+    Leaf k -> FreeCons (unsafeCoerce k) (unsafeCoerce r)
+    Node l' r' -> go1 l' (Node (unsafeCoerce r') (unsafeCoerce r))
+    Hoist nat l' -> go2 nat l' r
+
+  go2 :: forall g a' b' x'. (UnsafeBoundF ~> g) -> FreeBinds UnsafeBoundF a' x' -> FreeBinds g x' b' -> FreeCons g a' b'
+  go2 nat l r = case l of
+    Leaf k -> FreeCons (hoistFree nat <$> unsafeCoerce k) (unsafeCoerce r)
+    Node l' r' -> go2 nat l' (Node (Hoist nat (unsafeCoerce r')) (unsafeCoerce r))
+    Hoist nat' n -> go2 (nat <<< nat') n r
 
 view :: forall f a. Free f a -> Exists (FreeView f a)
 view = resume (mkExists <<< PureView) \a b -> mkExists (BindView a b)
