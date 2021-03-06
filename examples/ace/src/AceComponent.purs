@@ -9,8 +9,8 @@ import Ace.Types (Editor)
 import Data.Foldable (traverse_)
 import Data.Maybe (Maybe(..))
 import Effect.Aff.Class (class MonadAff)
-import FRP.Event as Event
 import Halogen as H
+import Halogen.Emitter as Emitter
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 
@@ -60,8 +60,8 @@ handleAction = case _ of
       editor <- H.liftEffect $ Ace.editNode element Ace.ace
       session <- H.liftEffect $ Editor.getSession editor
       H.modify_ (_ { editor = Just editor })
-      { event, push } <- H.liftEffect $ Event.create
-      void $ H.subscribe event
+      { emitter, push } <- H.liftEffect $ Emitter.create
+      void $ H.subscribe emitter
       H.liftEffect $ Session.onChange session (\_ -> push HandleChange)
   Finalize -> do
     -- Release the reference to the editor and do any other cleanup that a

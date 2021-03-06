@@ -28,8 +28,8 @@ import Effect.Class (liftEffect)
 import Effect.Exception (throwException)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import FRP.Event as Event
 import Halogen.Aff.Driver.State (DriverState(..), DriverStateRef(..), LifecycleHandlers, mapDriverState, unDriverStateX)
+import Halogen.Emitter as Emitter
 import Halogen.Query.ChildQuery as CQ
 import Halogen.Query.HalogenM (ForkId(..), HalogenAp(..), HalogenF(..), HalogenM(..), SubscriptionId(..))
 import Halogen.Query.HalogenQ as HQ
@@ -92,7 +92,7 @@ evalM render initRef (HalogenM hm) = foldFree (go initRef) hm
               pure a
     Subscribe fes k -> do
       sid <- fresh SubscriptionId ref
-      finalize <- liftEffect $ Event.subscribe (fes sid) \act →
+      finalize <- liftEffect $ Emitter.subscribe (fes sid) \act →
         handleAff $ evalF render ref (Input.Action act)
       DriverState ({ subscriptions }) <- liftEffect (Ref.read ref)
       liftEffect $ Ref.modify_ (map (M.insert sid finalize)) subscriptions

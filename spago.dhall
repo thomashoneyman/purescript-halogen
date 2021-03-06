@@ -7,7 +7,6 @@
     , "console"
     , "const"
     , "dom-indexed"
-    , "event"
     , "effect"
     , "foreign"
     , "fork"
