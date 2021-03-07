@@ -4,6 +4,17 @@ let upstream =
 in  upstream
   with event.version = "master"
   with event.repo = "https://github.com/thomashoneyman/purescript-event"
+  with event.dependencies
+       =
+    [ "prelude"
+    , "console"
+    , "effect"
+    , "filterable"
+    , "nullable"
+    , "unsafe-reference"
+    , "js-timers"
+    , "now"
+    ]
   with filterable.version = "master"
   with filterable.repo
        = "https://github.com/thomashoneyman/purescript-filterable"
