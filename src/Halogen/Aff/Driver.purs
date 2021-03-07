@@ -117,7 +117,7 @@ runUI renderSpec component i = do
   disposed <- liftEffect $ Ref.new false
   Eval.handleLifecycle lchs do
     eio <- Emitter.create
-    dsx <- Ref.read =<< runComponent lchs (liftEffect <<< flip Emitter.push eio.producer) i component
+    dsx <- Ref.read =<< runComponent lchs (liftEffect <<< flip Emitter.notify eio.listener) i component
     unDriverStateX (\st ->
       pure
         { query: evalDriver disposed st.selfRef

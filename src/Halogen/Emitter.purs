@@ -10,13 +10,13 @@ import Effect.Ref as Ref
 import Safe.Coerce (coerce)
 import Unsafe.Reference (unsafeRefEq)
 
-newtype Producer a = Producer (a -> Effect Unit)
+newtype Listener a = Listener (a -> Effect Unit)
 
-instance contravariantProducer :: Contravariant Producer where
-  cmap f (Producer g) = Producer (g <<< f)
+instance contravariantListener :: Contravariant Listener where
+  cmap f (Listener g) = Listener (g <<< f)
 
-push :: forall a. a -> Producer a -> Effect Unit
-push a (Producer f) = f a
+notify :: forall a. a -> Listener a -> Effect Unit
+notify a (Listener f) = f a
 
 newtype Subscription = Subscription (Effect Unit)
 
@@ -26,7 +26,6 @@ derive newtype instance monoidSubscription :: Monoid Subscription
 unsubscribe :: Subscription -> Effect Unit
 unsubscribe (Subscription unsub) = unsub
 
--- event type
 newtype Emitter a = Emitter ((a -> Effect Unit) -> Effect Subscription)
 
 instance functorEmitter :: Functor Emitter where
@@ -34,7 +33,7 @@ instance functorEmitter :: Functor Emitter where
 
 type EmitIO a =
   { emitter :: Emitter a
-  , producer :: Producer a
+  , listener :: Listener a
   }
 
 create :: forall a. Effect (EmitIO a)
@@ -46,7 +45,7 @@ create = do
         pure $ Subscription do
           _ <- Ref.modify (deleteBy unsafeRefEq k) subscribers
           pure unit
-    , producer: Producer \a -> do
+    , listener: Listener \a -> do
         Ref.read subscribers >>= traverse_ \k -> k a
     }
 
