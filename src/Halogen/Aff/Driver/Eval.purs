@@ -16,7 +16,7 @@ import Control.Monad.Free (foldFree)
 import Control.Parallel (parSequence_, parallel, sequential)
 import Data.Coyoneda (liftCoyoneda)
 import Data.Either (either)
-import Data.Foldable (sequence_, traverse_)
+import Data.Foldable (traverse_)
 import Data.List (List, (:))
 import Data.List as L
 import Data.Map as M
@@ -154,7 +154,7 @@ unsubscribe
 unsubscribe sid ref = do
   DriverState ({ subscriptions }) <- Ref.read ref
   subs <- Ref.read subscriptions
-  sequence_ (M.lookup sid =<< subs)
+  traverse_ Emitter.unsubscribe (M.lookup sid =<< subs)
 
 handleLifecycle :: Ref LifecycleHandlers -> Effect ~> Aff
 handleLifecycle lchs f = do

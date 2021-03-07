@@ -13,7 +13,7 @@ import Data.List ((:))
 import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..), maybe, isJust, isNothing)
-import Data.Traversable (for_, sequence_, traverse_)
+import Data.Traversable (for_, traverse_)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
 import Effect.Aff (Aff, killFiber)
@@ -117,7 +117,7 @@ runUI renderSpec component i = do
   disposed <- liftEffect $ Ref.new false
   Eval.handleLifecycle lchs do
     eio <- Emitter.create
-    dsx <- Ref.read =<< runComponent lchs (liftEffect <<< eio.push) i component
+    dsx <- Ref.read =<< runComponent lchs (liftEffect <<< flip Emitter.push eio.producer) i component
     unDriverStateX (\st ->
       pure
         { query: evalDriver disposed st.selfRef
@@ -291,7 +291,7 @@ cleanupSubscriptionsAndForks
    . DriverState r s f act ps i o
   -> Effect Unit
 cleanupSubscriptionsAndForks (DriverState ds) = do
-  traverse_ sequence_ =<< Ref.read ds.subscriptions
+  traverse_ (traverse_ Emitter.unsubscribe) =<< Ref.read ds.subscriptions
   Ref.write Nothing ds.subscriptions
   traverse_ (Eval.handleAff <<< killFiber (error "finalized")) =<< Ref.read ds.forks
   Ref.write M.empty ds.forks
