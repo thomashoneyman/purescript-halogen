@@ -9,7 +9,7 @@ import Prelude
 import Control.Monad.Fork.Class (fork)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Control.Parallel (parSequence_)
-import Data.List ((:))
+import Data.List (List(..), (:))
 import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..), maybe, isJust, isNothing)
@@ -28,10 +28,12 @@ import Halogen.Aff.Driver.State (DriverState(..), DriverStateRef(..), DriverStat
 import Halogen.Component (Component, ComponentSlot, ComponentSlotBox, unComponent, unComponentSlot)
 import Halogen.Data.Slot as Slot
 import Halogen.HTML.Core as HC
+import Halogen.Query.HalogenM (ComponentId(..))
 import Halogen.Query.HalogenQ as HQ
 import Halogen.Query.Input (Input)
 import Halogen.Query.Input as Input
 import Halogen.Subscription as HS
+import Safe.Coerce (coerce)
 
 -- | `RenderSpec` allows for alternative driver implementations without the need
 -- | to provide all of the driver machinery again, focusing just on the code
@@ -113,11 +115,10 @@ runUI
   -> Aff (HalogenIO f o Aff)
 runUI renderSpec component i = do
   lchs <- liftEffect newLifecycleHandlers
-  fresh <- liftEffect $ Ref.new 0
   disposed <- liftEffect $ Ref.new false
   Eval.handleLifecycle lchs do
     sio <- HS.create
-    dsx <- Ref.read =<< runComponent lchs (liftEffect <<< HS.notify sio.listener) i component
+    dsx <- Ref.read =<< runComponent (ComponentId Nil) lchs (liftEffect <<< HS.notify sio.listener) i component
     unDriverStateX (\st ->
       pure
         { query: evalDriver disposed st.selfRef
@@ -140,14 +141,15 @@ runUI renderSpec component i = do
 
   runComponent
     :: forall f' i' o'
-     . Ref LifecycleHandlers
+     . ComponentId
+    -> Ref LifecycleHandlers
     -> (o' -> Aff Unit)
     -> i'
     -> Component f' i' o' Aff
     -> Effect (Ref (DriverStateX r f' o'))
-  runComponent lchs handler j = unComponent \c -> do
+  runComponent id lchs handler j = unComponent \c -> do
     lchs' <- newLifecycleHandlers
-    var <- initDriverState c j handler lchs'
+    var <- initDriverState id c j handler lchs'
     pre <- Ref.read lchs
     Ref.write { initializers: L.Nil, finalizers: pre.finalizers } lchs
     unDriverStateX (render lchs <<< _.selfRef) =<< Ref.read var
@@ -176,7 +178,7 @@ runUI renderSpec component i = do
     rendering <-
       renderSpec.render
         (Eval.handleAff <<< handler)
-        (renderChild lchs childHandler ds.childrenIn ds.childrenOut)
+        (renderChild ds.id ds.fresh lchs childHandler ds.childrenIn ds.childrenOut)
         (ds.component.render ds.state)
         ds.rendering
     children <- Ref.read ds.childrenOut
@@ -199,13 +201,15 @@ runUI renderSpec component i = do
 
   renderChild
     :: forall ps act
-     . Ref LifecycleHandlers
+     . ComponentId
+    -> Ref Int
+    -> Ref LifecycleHandlers
     -> (act -> Aff Unit)
     -> Ref (Slot.SlotStorage ps (DriverStateRef r))
     -> Ref (Slot.SlotStorage ps (DriverStateRef r))
     -> ComponentSlotBox ps Aff act
     -> Effect (RenderStateX r)
-  renderChild lchs handler childrenInRef childrenOutRef =
+  renderChild parentId parentFresh lchs handler childrenInRef childrenOutRef =
     unComponentSlot \slot -> do
       childrenIn <- slot.pop <$> Ref.read childrenInRef
       var <- case childrenIn of
@@ -216,8 +220,10 @@ runUI renderSpec component i = do
             flip Ref.write st.handlerRef $ maybe (pure unit) handler <<< slot.output
             Eval.handleAff $ Eval.evalM render st.selfRef (st.component.eval (HQ.Receive slot.input unit))) dsx
           pure existing
-        Nothing ->
-          runComponent lchs (maybe (pure unit) handler <<< slot.output) slot.input slot.component
+        Nothing -> do
+          n <- Ref.modify (_ + 1) parentFresh
+          let id = coerce (n : _) parentId
+          runComponent id lchs (maybe (pure unit) handler <<< slot.output) slot.input slot.component
       isDuplicate <- isJust <<< slot.get <$> Ref.read childrenOutRef
       when isDuplicate
         $ warn "Halogen: Duplicate slot address was detected during rendering, unexpected results may occur"
