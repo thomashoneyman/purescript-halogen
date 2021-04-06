@@ -51,7 +51,7 @@ data HalogenF state action slots output m a
   | Par (HalogenAp state action slots output m a)
   | Fork (HalogenM state action slots output m Unit) (ForkId -> a)
   | Kill ForkId a
-  | GetId (ComponentId -> a)
+  | GetComponentId (ComponentId -> a)
   | GetRef RefLabel (Maybe Element -> a)
 
 instance functorHalogenF :: Functor m => Functor (HalogenF state action slots output m) where
@@ -65,7 +65,7 @@ instance functorHalogenF :: Functor m => Functor (HalogenF state action slots ou
     Par pa -> Par (map f pa)
     Fork hmu k -> Fork hmu (f <<< k)
     Kill fid a -> Kill fid (f a)
-    GetId k -> GetId (f <<< k)
+    GetComponentId k -> GetComponentId (f <<< k)
     GetRef p k -> GetRef p (f <<< k)
 
 -- | The Halogen component eval effect monad.
@@ -168,8 +168,8 @@ derive newtype instance eqComponentId :: Eq ComponentId
 derive newtype instance ordComponentId :: Ord ComponentId
 
 -- | Retrieves a component's unique identifier.
-getId :: forall state action slots output m. HalogenM state action slots output m ComponentId
-getId = HalogenM $ liftF $ GetId identity
+getComponentId :: forall state action slots output m. HalogenM state action slots output m ComponentId
+getComponentId = HalogenM $ liftF $ GetComponentId identity
 
 -- | The ID value associated with a subscription. Allows the subscription to be
 -- | stopped at a later time.
@@ -259,7 +259,7 @@ imapState f f' (HalogenM h) = HalogenM (hoistFree go h)
     Par p -> Par (over HalogenAp (hoistFreeAp (imapState f f')) p)
     Fork hmu k -> Fork (imapState f f' hmu) k
     Kill fid a -> Kill fid a
-    GetId k -> GetId k
+    GetComponentId k -> GetComponentId k
     GetRef p k -> GetRef p k
 
 mapAction
@@ -281,7 +281,7 @@ mapAction f (HalogenM h) = HalogenM (hoistFree go h)
     Par p -> Par (over HalogenAp (hoistFreeAp (mapAction f)) p)
     Fork hmu k -> Fork (mapAction f hmu) k
     Kill fid a -> Kill fid a
-    GetId k -> GetId k
+    GetComponentId k -> GetComponentId k
     GetRef p k -> GetRef p k
 
 mapOutput
@@ -302,7 +302,7 @@ mapOutput f (HalogenM h) = HalogenM (hoistFree go h)
     Par p -> Par (over HalogenAp (hoistFreeAp (mapOutput f)) p)
     Fork hmu k -> Fork (mapOutput f hmu) k
     Kill fid a -> Kill fid a
-    GetId k -> GetId k
+    GetComponentId k -> GetComponentId k
     GetRef p k -> GetRef p k
 
 hoist
@@ -324,5 +324,5 @@ hoist nat (HalogenM fa) = HalogenM (hoistFree go fa)
     Par p -> Par (over HalogenAp (hoistFreeAp (hoist nat)) p)
     Fork hmu k -> Fork (hoist nat hmu) k
     Kill fid a -> Kill fid a
-    GetId k -> GetId k
+    GetComponentId k -> GetComponentId k
     GetRef p k -> GetRef p k

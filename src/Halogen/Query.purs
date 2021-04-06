@@ -26,7 +26,7 @@ import Data.Symbol (class IsSymbol)
 import Effect.Aff.Class (liftAff) as Exports
 import Effect.Class (liftEffect) as Exports
 import Halogen.Data.Slot (Slot)
-import Halogen.Query.HalogenM (ComponentId, ForkId, HalogenF(..), HalogenM(..), SubscriptionId, fork, getId, getRef, kill, query, queryAll, raise, subscribe, subscribe', unsubscribe)
+import Halogen.Query.HalogenM (ComponentId, ForkId, HalogenF(..), HalogenM(..), SubscriptionId, fork, getComponentId, getRef, kill, query, queryAll, raise, subscribe, subscribe', unsubscribe)
 import Halogen.Query.HalogenQ (HalogenQ(..))
 import Halogen.Query.Input (RefLabel(..))
 import Prim.Row as Row
